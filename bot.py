@@ -24,6 +24,6 @@ async def main():
     async with bot:
         for cog in COGS:
             await bot.load_extension(cog)
-        await bot.start(os.environ["DISCORD_TOKEN"])
+        await bot.start(os.environ["1409796045520764990"])
 
 asyncio.run(main())
