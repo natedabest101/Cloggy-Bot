@@ -17,7 +17,7 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} slash command(s).")
-	await bot.tree.sync(guild=discord.Object(id=1409796045520764990))
+		await bot.tree.sync(guild=discord.Object(id=1409796045520764990))
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
