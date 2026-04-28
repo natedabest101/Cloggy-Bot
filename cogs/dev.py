@@ -316,11 +316,6 @@ class Dev(commands.Cog):
         embed.set_footer(text="Use /task commands to manage")
         await channel.send(embed=embed)
 
-    async def cog_load(self):
-        self.bot.tree.add_command(self.update_group)
-        self.bot.tree.add_command(self.bug_group)
-        self.bot.tree.add_command(self.task_group)
-
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CheckFailure):
             await interaction.response.send_message("❌ You don't have permission to use this command.", ephemeral=True)
