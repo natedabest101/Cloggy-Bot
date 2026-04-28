@@ -17,6 +17,7 @@ async def on_ready():
     try:
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} slash command(s).")
+        await bot.tree.sync(guild=discord.Object(id=1409796045520764990))
     except Exception as e:
         print(f"Failed to sync commands: {e}")
 
@@ -24,6 +25,6 @@ async def main():
     async with bot:
         for cog in COGS:
             await bot.load_extension(cog)
-        await bot.start(os.environ["1409796045520764990"])
+        await bot.start(os.environ["DISCORD_TOKEN"])
 
 asyncio.run(main())
