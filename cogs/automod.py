@@ -11,7 +11,7 @@ SPAM_MESSAGE_LIMIT    = 5
 SPAM_INTERVAL_SECONDS = 5
 SPAM_MUTE_MINUTES     = 5
 MOD_ROLE_ID           = 1454758126912933970
-LOG_CHANNEL_NAME      = "mod-log"
+LOG_CHANNEL_NAME      = "logging"
 
 IMMUNE_ROLE_IDS: set[int]    = {MOD_ROLE_ID}
 IMMUNE_CHANNEL_IDS: set[int] = set()
@@ -305,9 +305,6 @@ class AutoMod(commands.Cog):
         else:
             embed.add_field(name="Multilang", value="✅ No match", inline=False)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    async def cog_load(self):
-        self.bot.tree.add_command(self.automod_group)
 
     async def cog_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CheckFailure):
