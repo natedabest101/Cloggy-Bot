@@ -1,0 +1,132 @@
+import discord
+from discord.ext import commands
+
+# Set this to the name of your mod-log channel, or configure per-guild.
+LOG_CHANNEL_NAME = "mod-log"
+
+
+class Logging(commands.Cog):
+    """Audit trail and mod-log event listener."""
+
+    def __init__(self, bot):
+        self.bot = bot
+
+    async def get_log_channel(self, guild: discord.Guild) -> discord.TextChannel | None:
+        return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
+
+    def mod_embed(self, action: str, moderator: discord.Member,
+                  target: discord.Member, reason: str, color: discord.Color) -> discord.Embed:
+        embed = discord.Embed(title=f"🛡️ {action}", color=color)
+        embed.add_field(name="User", value=f"{target.mention} (`{target.id}`)")
+        embed.add_field(name="Moderator", value=f"{moderator.mention}")
+        embed.add_field(name="Reason", value=reason, inline=False)
+        embed.set_footer(text=f"User ID: {target.id}")
+        embed.timestamp = discord.utils.utcnow()
+        return embed
+
+    # ── Custom mod_action event (dispatched by moderation.py) ─────────────────
+
+    @commands.Cog.listener()
+    async def on_mod_action(self, guild, moderator, target, action: str, reason: str):
+        channel = await self.get_log_channel(guild)
+        if not channel:
+            return
+        color_map = {
+            "ban": discord.Color.red(),
+            "kick": discord.Color.orange(),
+            "warn": discord.Color.yellow(),
+        }
+        color = next((v for k, v in color_map.items() if k in action), discord.Color.blurple())
+        embed = self.mod_embed(action.capitalize(), moderator, target, reason, color)
+        await channel.send(embed=embed)
+
+    # ── Member join/leave ─────────────────────────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_member_join(self, member: discord.Member):
+        channel = await self.get_log_channel(member.guild)
+        if not channel:
+            return
+        embed = discord.Embed(title="📥 Member Joined", color=discord.Color.green())
+        embed.set_thumbnail(url=member.display_avatar.url)
+        embed.add_field(name="User", value=f"{member.mention} (`{member.id}`)")
+        embed.add_field(name="Account Created", value=discord.utils.format_dt(member.created_at, "R"))
+        embed.timestamp = discord.utils.utcnow()
+        await channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_member_remove(self, member: discord.Member):
+        channel = await self.get_log_channel(member.guild)
+        if not channel:
+            return
+        embed = discord.Embed(title="📤 Member Left", color=discord.Color.greyple())
+        embed.add_field(name="User", value=f"{member} (`{member.id}`)")
+        embed.timestamp = discord.utils.utcnow()
+        await channel.send(embed=embed)
+
+    # ── Message delete/edit ───────────────────────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_message_delete(self, message: discord.Message):
+        if message.author.bot or not message.guild:
+            return
+        channel = await self.get_log_channel(message.guild)
+        if not channel:
+            return
+        embed = discord.Embed(title="🗑️ Message Deleted", color=discord.Color.dark_red())
+        embed.add_field(name="Author", value=f"{message.author.mention} (`{message.author.id}`)")
+        embed.add_field(name="Channel", value=message.channel.mention)
+        if message.content:
+            embed.add_field(name="Content", value=message.content[:1024], inline=False)
+        embed.timestamp = discord.utils.utcnow()
+        await channel.send(embed=embed)
+
+    @commands.Cog.listener()
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
+        if before.author.bot or not before.guild or before.content == after.content:
+            return
+        channel = await self.get_log_channel(before.guild)
+        if not channel:
+            return
+        embed = discord.Embed(title="✏️ Message Edited", color=discord.Color.gold(),
+                              url=after.jump_url)
+        embed.add_field(name="Author", value=f"{before.author.mention}")
+        embed.add_field(name="Channel", value=before.channel.mention)
+        embed.add_field(name="Before", value=before.content[:512] or "*(empty)*", inline=False)
+        embed.add_field(name="After", value=after.content[:512] or "*(empty)*", inline=False)
+        embed.timestamp = discord.utils.utcnow()
+        await channel.send(embed=embed)
+
+    # ── Role / nickname changes ────────────────────────────────────────────────
+
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        channel = await self.get_log_channel(before.guild)
+        if not channel:
+            return
+
+        # Nickname change
+        if before.nick != after.nick:
+            embed = discord.Embed(title="📝 Nickname Changed", color=discord.Color.blurple())
+            embed.add_field(name="User", value=after.mention)
+            embed.add_field(name="Before", value=before.nick or "*None*")
+            embed.add_field(name="After", value=after.nick or "*None*")
+            embed.timestamp = discord.utils.utcnow()
+            await channel.send(embed=embed)
+
+        # Role change
+        added = set(after.roles) - set(before.roles)
+        removed = set(before.roles) - set(after.roles)
+        if added or removed:
+            embed = discord.Embed(title="🎭 Roles Updated", color=discord.Color.purple())
+            embed.add_field(name="User", value=after.mention)
+            if added:
+                embed.add_field(name="Added", value=", ".join(r.mention for r in added), inline=False)
+            if removed:
+                embed.add_field(name="Removed", value=", ".join(r.mention for r in removed), inline=False)
+            embed.timestamp = discord.utils.utcnow()
+            await channel.send(embed=embed)
+
+
+async def setup(bot):
+    await bot.add_cog(Logging(bot))
