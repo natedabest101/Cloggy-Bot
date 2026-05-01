@@ -11,7 +11,11 @@ SPAM_MESSAGE_LIMIT    = 5
 SPAM_INTERVAL_SECONDS = 5
 SPAM_MUTE_MINUTES     = 5
 MOD_ROLE_ID           = 1454758126912933970
-LOG_CHANNEL_NAME      = "logging"
+LOG_CHANNEL_NAME      = "mod-log"
+
+# Messages in this category are ALWAYS deleted when they break a rule,
+# even for soft-flag checks that normally only log.
+STRICT_CATEGORY_ID = 1455040666672435392
 
 IMMUNE_ROLE_IDS: set[int]    = {MOD_ROLE_ID}
 IMMUNE_CHANNEL_IDS: set[int] = set()
@@ -117,6 +121,12 @@ class AutoMod(commands.Cog):
             return True
         return False
 
+    def in_strict_category(self, message: discord.Message) -> bool:
+        """Returns True if the message is in the strict-delete category."""
+        ch = message.channel
+        cat = getattr(ch, "category_id", None)
+        return cat == STRICT_CATEGORY_ID
+
     async def get_log(self, guild: discord.Guild):
         return discord.utils.get(guild.text_channels, name=LOG_CHANNEL_NAME)
 
@@ -134,23 +144,41 @@ class AutoMod(commands.Cog):
             await message.channel.send(f"⚠️ {message.author.mention} — {reason}", delete_after=8)
         except discord.HTTPException:
             pass
-        embed = discord.Embed(title="🤖 AutoMod — Blocked", color=discord.Color.red())
-        embed.add_field(name="User",    value=f"{message.author.mention} (`{message.author.id}`)")
-        embed.add_field(name="Channel", value=message.channel.mention)
-        embed.add_field(name="Reason",  value=reason, inline=False)
-        embed.add_field(name="Content", value=message.content[:512] or "*(empty)*", inline=False)
+        await self._automod_log(message, "🤖 AutoMod — Blocked", reason, discord.Color.red())
+
+    async def _automod_log(self, message: discord.Message, title: str, reason: str, color: discord.Color, extra: str = None):
+        """Unified automod log embed posted to mod-log."""
+        in_strict = self.in_strict_category(message)
+        embed = discord.Embed(title=title, color=color)
+        embed.add_field(name="User",     value=f"{message.author.mention} (`{message.author.id}`)")
+        embed.add_field(name="Channel",  value=message.channel.mention)
+        embed.add_field(name="Category", value="⚠️ Strict (auto-delete)" if in_strict else "Standard")
+        embed.add_field(name="Reason",   value=reason, inline=False)
+        if extra:
+            embed.add_field(name="Detail", value=extra, inline=False)
+        embed.add_field(name="Content",  value=message.content[:512] or "*(empty)*", inline=False)
+        embed.add_field(name="Jump",     value=f"[Go to message]({message.jump_url})" if not in_strict else "*(message deleted)*", inline=False)
         embed.timestamp = discord.utils.utcnow()
         await self.log_embed(message.guild, embed)
 
     async def log_possible_violation(self, message: discord.Message, detail: str):
-        embed = discord.Embed(title="🔍 Possible Language Violation", color=discord.Color.gold())
-        embed.add_field(name="User",    value=f"{message.author.mention} (`{message.author.id}`)")
-        embed.add_field(name="Channel", value=message.channel.mention)
-        embed.add_field(name="Detail",  value=detail, inline=False)
-        embed.add_field(name="Content", value=message.content[:512] or "*(empty)*", inline=False)
-        embed.add_field(name="Jump",    value=f"[Go to message]({message.jump_url})", inline=False)
-        embed.timestamp = discord.utils.utcnow()
-        await self.log_embed(message.guild, embed)
+        """Log a fuzzy flag. In strict category, also deletes the message."""
+        if self.in_strict_category(message):
+            try:
+                await message.delete()
+            except discord.HTTPException:
+                pass
+            try:
+                await message.channel.send(
+                    f"⚠️ {message.author.mention} — Your message was removed for review.", delete_after=8
+                )
+            except discord.HTTPException:
+                pass
+        await self._automod_log(
+            message, "🔍 Possible Language Violation",
+            "Fuzzy match — flagged for manual review",
+            discord.Color.gold(), extra=detail
+        )
 
     async def check_bad_words(self, message: discord.Message) -> bool:
         if BLOCKED_PATTERN.search(normalise(message.content)):
