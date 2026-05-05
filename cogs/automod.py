@@ -65,30 +65,22 @@ def build_pattern(words: list[str]) -> re.Pattern:
 
 def build_fuzzy_pattern(words: list[str]) -> re.Pattern:
     """
-    Builds a softer pattern for embedded-word detection.
-    Rules to avoid false positives:
-    - Only generates skeleton variants for words 6+ chars long
-    - Skeletons must be at least 5 chars to avoid matching common letter pairs
-    - All matches are wrapped in word boundaries so "tr" won't hit "tree"
-    - The full normalised word is always included as a fallback
+    Builds a conservative fuzzy pattern.
+    Only matches the full normalised blocked word as a whole word.
+    Skeleton/consonant matching is disabled — it caused too many false positives.
+    The hard pattern already catches leet-speak; fuzzy catches spacing tricks
+    like "f u c k" by stripping spaces in normalise() before matching.
     """
     if not words:
         return re.compile(r"(?!)")
     parts = set()
     for w in words:
         n = normalise(w)
-        if len(n) < 4:
-            continue  # too short to fuzzy-match safely
-        parts.add(re.escape(n))
-        # Only generate consonant skeleton for longer words
-        if len(n) >= 6:
-            skeleton = n[0] + re.sub(r"[aeiou]", "", n[1:-1]) + n[-1]
-            if skeleton != n and len(skeleton) >= 5:
-                parts.add(re.escape(skeleton))
+        if len(n) >= 4:
+            parts.add(re.escape(n))
     if not parts:
         return re.compile(r"(?!)")
-    # \b word boundaries prevent matching fragments inside normal words
-    return re.compile(r"\b(" + "|".join(parts) + r")\b")
+    return re.compile("(" + "|".join(parts) + ")")
 
 BLOCKED_PATTERN = build_pattern(BLOCKED_WORDS)
 FUZZY_PATTERN   = build_fuzzy_pattern(BLOCKED_WORDS)
@@ -150,6 +142,7 @@ class AutoMod(commands.Cog):
             await ch.send(embed=embed)
 
     async def warn_and_delete(self, message: discord.Message, reason: str):
+        # Always delete in strict category; also delete normally for hard blocks
         try:
             await message.delete()
         except discord.HTTPException:
@@ -176,7 +169,10 @@ class AutoMod(commands.Cog):
         await self.log_embed(message.guild, embed)
 
     async def log_possible_violation(self, message: discord.Message, detail: str):
-        """Log a fuzzy flag. In strict category, also deletes the message."""
+        """
+        Soft flag: logs to mod-log for manual review.
+        In the strict category, also deletes the message.
+        """
         if self.in_strict_category(message):
             try:
                 await message.delete()
@@ -184,14 +180,17 @@ class AutoMod(commands.Cog):
                 pass
             try:
                 await message.channel.send(
-                    f"⚠️ {message.author.mention} — Your message was removed for review.", delete_after=8
+                    f"⚠️ {message.author.mention} — Your message was flagged and removed for review.",
+                    delete_after=8
                 )
             except discord.HTTPException:
                 pass
         await self._automod_log(
-            message, "🔍 Possible Language Violation",
+            message,
+            "🔍 Possible Language Violation",
             "Fuzzy match — flagged for manual review",
-            discord.Color.gold(), extra=detail
+            discord.Color.gold(),
+            extra=detail
         )
 
     async def check_bad_words(self, message: discord.Message) -> bool:
@@ -241,37 +240,9 @@ class AutoMod(commands.Cog):
             return True
         return False
 
-    async def enforce_strict_category(self, message: discord.Message) -> bool:
-        """
-        If the message is in the strict category, delete it and log it
-        regardless of whether any filter matched. Returns True if deleted.
-        """
-        if not self.in_strict_category(message):
-            return False
-        try:
-            await message.delete()
-        except discord.HTTPException:
-            pass
-        try:
-            await message.channel.send(
-                f"⚠️ {message.author.mention} — Messages are not permitted in this channel.",
-                delete_after=8
-            )
-        except discord.HTTPException:
-            pass
-        await self._automod_log(
-            message, "🚫 Strict Category — Message Deleted",
-            "Message sent in a restricted category and auto-deleted.",
-            discord.Color.dark_red()
-        )
-        return True
-
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if not message.guild or self.is_immune(message):
-            return
-        # Strict category: delete all messages unconditionally, then stop
-        if await self.enforce_strict_category(message):
             return
         if await self.check_bad_words(message): return
         if await self.check_multilang(message):  return
@@ -282,8 +253,6 @@ class AutoMod(commands.Cog):
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
         if not after.guild or self.is_immune(after):
-            return
-        if await self.enforce_strict_category(after):
             return
         if await self.check_bad_words(after): return
         if await self.check_multilang(after):  return
