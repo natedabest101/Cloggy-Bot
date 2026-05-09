@@ -9,7 +9,7 @@ import os
 
 BANNED_ROLE_NAME = "Banned"
 APPEAL_DAYS = 30
-MOD_ROLE_ID = 1454758126912933970
+MOD_ROLE_ID = 1462813463301722222
 LOG_CHANNEL_NAME = "mod-log"
 
 warnings: dict[int, dict[int, list[dict]]] = {}
