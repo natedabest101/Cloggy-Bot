@@ -24,7 +24,7 @@ TODAY = "May 10, 2025"
 # ── Document text ──────────────────────────────────────────────────────────────
 
 TOS_TEXT = f"""**Cloggy Marketplace – Terms of Service**
-*Last Updated: {TODAY}*
+*Last Updated: May 9th, 2026*
 
 These Terms of Service ("Terms") govern your access to and use of the Cloggy Marketplace ("Marketplace"), operated through our Discord server and any associated platforms. By accessing, purchasing from, or participating in the Marketplace, you agree to be bound by these Terms.
 
