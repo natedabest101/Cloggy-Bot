@@ -24,7 +24,7 @@ TODAY = "May 10, 2025"
 # ── Document text ──────────────────────────────────────────────────────────────
 
 TOS_TEXT = f"""**Cloggy Marketplace – Terms of Service**
-*Last Updated: May 9th, 2026*
+*Last Updated: {TODAY}*
 
 These Terms of Service ("Terms") govern your access to and use of the Cloggy Marketplace ("Marketplace"), operated through our Discord server and any associated platforms. By accessing, purchasing from, or participating in the Marketplace, you agree to be bound by these Terms.
 
@@ -116,6 +116,32 @@ agreed_data: dict = {}
 
 # ── Views ──────────────────────────────────────────────────────────────────────
 
+
+def chunk_text(text: str, limit: int = 1900) -> list[str]:
+    """Split text into chunks that fit within Discord's message limit."""
+    lines   = text.split("\n")
+    chunks  = []
+    current = ""
+    for line in lines:
+        if len(current) + len(line) + 1 > limit:
+            if current:
+                chunks.append(current.strip())
+            current = line
+        else:
+            current += ("\n" if current else "") + line
+    if current:
+        chunks.append(current.strip())
+    return chunks
+
+async def send_long_dm(user: discord.User, intro: str, body: str, view: discord.ui.View = None):
+    """Send a long document as multiple DM messages, attaching the view to the last one."""
+    chunks = chunk_text(body)
+    await user.send(intro)
+    for i, chunk in enumerate(chunks):
+        is_last = i == len(chunks) - 1
+        await user.send(chunk, view=view if is_last else None)
+
+
 class AgreementView(discord.ui.View):
     """Persistent view with the 'Read & Agree' button posted in the agree channel."""
 
@@ -165,10 +191,11 @@ class TosAgreeView(discord.ui.View):
     async def agree_tos(self, interaction: discord.Interaction, button: discord.ui.Button):
         button.disabled = True
         await interaction.message.edit(view=self)
-        await interaction.response.send_message(
-            "✅ Terms of Service accepted.\n\n"
-            "📋 **Now please read the DMCA Policy below.**\n\n"
-            + DMCA_TEXT,
+        await interaction.response.send_message("✅ Terms of Service accepted.")
+        await send_long_dm(
+            interaction.user,
+            "📋 **Now please read the DMCA Policy below.**",
+            DMCA_TEXT,
             view=DmcaAgreeView(self.guild_id, self.user_id)
         )
 
