@@ -9,7 +9,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-COGS = ["cogs.dev", "marketplace.py", "cogs.moderation", "cogs.modlog", "cogs.automod", "cogs.mp"]
+COGS = ["cogs.dev", "cogs.marketplace", "cogs.moderation", "cogs.modlog", "cogs.automod", "cogs.mp"]
 
 @bot.event
 async def on_ready():
