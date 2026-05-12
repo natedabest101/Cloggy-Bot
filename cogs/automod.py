@@ -10,7 +10,7 @@ import os
 SPAM_MESSAGE_LIMIT    = 5
 SPAM_INTERVAL_SECONDS = 5
 SPAM_MUTE_MINUTES     = 5
-MOD_ROLE_ID           = 1454758126912933970
+MOD_ROLE_ID           = 1462813463301722222
 LOG_CHANNEL_NAME      = "mod-log"
 
 # Messages in this category are ALWAYS deleted when they break a rule,
